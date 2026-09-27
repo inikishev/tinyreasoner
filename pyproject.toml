@@ -1,0 +1,59 @@
+# NEW VERSION TUTORIAL FOR MYSELF
+# STEP 1 - COMMIT NEW CHANGES AND PUSH THEM
+# STEP 2 - BUMP VERSION AND COMMIT IT (DONT PUSH!!!!)
+# STEP 3 - CREATE TAG WITH THAT VERSION
+# STEP 4 - PUSH (SYNC) CHANGES
+# STEP 5 - PUSH TAG
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinyreasoner"
+description = "tinyreasoner"
+version = "0.0.1"
+requires-python = ">=3.13"
+dependencies = [
+    "torch",
+    "transformers",
+    "trl",
+    "nltk",
+    "sympy>=1.14.0",
+    "polars>=1.41.2",
+    "tqdm>=4.68.3",
+    "ipykernel>=7.3.0",
+    "ipywidgets>=8.1.8",
+    "huggingface-hub>=1.20.1",
+    "fsspec>=2026.4.0",
+    "matplotlib>=3.11.0",
+    "langchain-core>=1.4.8",
+    "myagent",
+    "xmltodict>=1.0.4",
+    "wonderwords>=3.0.1",
+    "json-repair>=0.61.0",
+]
+readme = "README.md"
+authors = [
+  {name = "Ivan Nikishev", email = "nkshv2@gmail.com"},
+]
+license = {file = "LICENSE"}
+keywords = ["autoresearch"]
+
+
+[project.urls]
+Homepage = "https://github.com/inikishev/tinyreasoner"
+Repository = "https://github.com/inikishev/tinyreasoner"
+Issues = "https://github.com/inikishev/tinyreasoner/issues"
+
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+
+[tool.setuptools.packages]
+find = {}  # Scanning implicit namespaces is active by default
+
+[tool.uv.sources]
+myagent = { path = "../myagent", editable = true }
