@@ -12,4 +12,4 @@ def load(n_rows: int | None = None):
     )
 
     df = pl.read_ndjson(local_path, n_rows=n_rows)
-    return [[chat_api.UserMessage(row["question"]), chat_api.AssistantMessage(row["responses"][0]["response"])] for row in df.iter_rows(named=True)]
+    return [[chat_api.UserMessage(row["question"]), chat_api.AssistantMessage(text=row["responses"][0]["response"])] for row in df.iter_rows(named=True)]

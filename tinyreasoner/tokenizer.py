@@ -76,6 +76,8 @@ class BaseTokenizer(ABC):
         self.tool_definition_idx = self.special_idxs.tool_definition
         self.think_idx = self.special_idxs.think
 
+        self.space_idx = self.encode_text(" ")[0]
+
     @property
     @abstractmethod
     def vocab_size(self) -> int:
@@ -126,11 +128,7 @@ class BaseTokenizer(ABC):
 
 # ---------------------------- character tokenizer --------------------------- #
 
-_punctuation_chars = " \n.,:;!?'\"`#"
-_math_chars = "=+-*/^%><)(@$"
-_logic_chars = "&|^~"
-_python_chars = r"{}[]_\\"
-_chars = sorted(set(string.ascii_lowercase + string.digits + _punctuation_chars + _math_chars + _logic_chars + _python_chars))
+_chars = sorted(set(string.ascii_lowercase + string.digits + string.punctuation + " \n"))
 
 def _create_keyword_splitter(words: Sequence[str]):
     # sort words by length descending to ensure words that

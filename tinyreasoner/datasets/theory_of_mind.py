@@ -31,6 +31,6 @@ def load() -> list[list[chat_api.BaseItem]]:
     samples: list[list[chat_api.BaseItem]] = []
     for row in df.iter_rows(named=True):
         assert len(row["input"].strip()) == 0
-        samples.append([chat_api.UserMessage(row["instruction"]), chat_api.AssistantMessage(row["response"])])
+        samples.append([chat_api.UserMessage(row["instruction"]), chat_api.AssistantMessage(text=row["response"])])
 
     return samples

@@ -17,9 +17,9 @@ def _map_type(raw: str) -> str:
     raw = raw.strip().lower().split(",")[0].split("=")[0].strip()
     if any(raw.startswith(p) for p in ("list", "tuple", "set")):
         return "array"
-    if raw.startswith("dict") or raw.startswith("map"):
+    if raw.startswith(("dict", "map")):
         return "object"
-    if raw.startswith("callable") or raw.startswith("union"):
+    if raw.startswith(("callable", "union")):
         return "string"
     return _TYPE_MAP.get(raw, "string")
 
@@ -46,7 +46,7 @@ def _convert_params(xlam_params: dict) -> dict:
     return schema
 
 def load(verbose: bool = False) -> list[list[chat_api.BaseItem]]:
-    with open(str(XLAM_PATH)) as f:
+    with open(str(XLAM_PATH),'r',encoding='utf-8') as f:
         data = json.load(f)
 
     samples = []
@@ -80,12 +80,7 @@ def load(verbose: bool = False) -> list[list[chat_api.BaseItem]]:
                     output=None,
                 ))
 
-            items.append(chat_api.AssistantMessage(
-                text="",
-                reasoning="",
-                tool_calls=tool_calls,
-            ))
-
+            items.extend(chat_api.AssistantMessage(tool_call=tc) for tc in tool_calls)
             samples.append(items)
 
         except Exception as e:

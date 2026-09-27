@@ -819,7 +819,7 @@ GENERATORS = [
 def _make_sample(question: str, answer: str) -> list[chat_api.BaseItem]:
     return [
         chat_api.UserMessage(f"{question} Only include the answer in your response."),
-        chat_api.AssistantMessage(answer),
+        chat_api.AssistantMessage(text=answer),
     ]
 
 

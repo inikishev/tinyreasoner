@@ -1,6 +1,8 @@
+import os
+
 import polars as pl
 from huggingface_hub import hf_hub_download
-import os
+
 
 def load(n_rows: int | None = None) -> list[str]:
     local_path = hf_hub_download(

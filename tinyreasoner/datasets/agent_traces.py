@@ -2,6 +2,8 @@ import polars as pl
 from huggingface_hub import hf_hub_download
 
 from .. import chat_api
+
+
 def load(verbose: bool = False) -> list[list[chat_api.BaseItem]]:
     local_path = hf_hub_download(
         repo_id="trace-commons/agent-traces",

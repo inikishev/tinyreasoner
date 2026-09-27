@@ -875,7 +875,7 @@ GENERATORS = [
 def _make_sample(question: str, answer: str) -> list[chat_api.BaseItem]:
     return [
         chat_api.UserMessage(f"{question.replace('True','true').replace('False','false').replace('  ', ' ')}\nOnly include the answer in your response."),
-        chat_api.AssistantMessage(answer.replace('True','true').replace('False','false').replace('  ', ' ')),
+        chat_api.AssistantMessage(text=answer.replace('True','true').replace('False','false').replace('  ', ' ')),
     ]
 
 def _is_over_limit(s: str):

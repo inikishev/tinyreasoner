@@ -6,9 +6,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from .sampling import temperature_sampling, _GenerationOutput
-
 from ..tokenizer import BaseTokenizer
+from .sampling import _GenerationOutput, temperature_sampling
+
 
 class BaseModel(nn.Module, ABC):
 

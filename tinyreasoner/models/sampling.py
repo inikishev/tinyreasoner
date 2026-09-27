@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any, NamedTuple, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 import torch
@@ -36,6 +36,7 @@ class _GenerationOutput(NamedTuple):
     tc_args_tokens: list[int]
     finish_reason: Literal["stop", "tool_call", "max_tokens"]
 
+# TODO: update to new API!
 
 @torch.inference_mode()
 def temperature_sampling(

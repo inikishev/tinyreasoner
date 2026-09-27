@@ -30,12 +30,12 @@ def load():
 
         samples.append([
             chat_api.UserMessage(f'{row["question"]}\nOnly include the answer in your response.'),
-            chat_api.AssistantMessage(str(answer))
+            chat_api.AssistantMessage(text=str(answer))
         ])
 
         samples.append([
             chat_api.UserMessage(f'{row["question"]}. Write python code to solve this and the output.'),
-            chat_api.AssistantMessage(f'```py\n{row["reasoning"]}\n```\n\nAnswer: {answer}')
+            chat_api.AssistantMessage(text=f'```py\n{row["reasoning"]}\n```\n\nAnswer: {answer}')
         ])
 
     df = pl.read_ndjson(ROOT / "arithmetic_1000.jsonl")
@@ -46,7 +46,7 @@ def load():
 
         samples.append([
             chat_api.UserMessage(f'{row["question"]}\nOnly include the answer in your response.'),
-            chat_api.AssistantMessage(str(answer))
+            chat_api.AssistantMessage(text=str(answer))
         ])
 
     with open(ROOT / "wordProblems_complete.json", "r", encoding='utf-8') as f:
@@ -59,7 +59,7 @@ def load():
 
         samples.append([
             chat_api.UserMessage(f'{row["question"]}\nOnly include the answer in your response.'),
-            chat_api.AssistantMessage(str(answer))
+            chat_api.AssistantMessage(text=str(answer))
         ])
 
 

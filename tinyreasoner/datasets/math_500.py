@@ -1,7 +1,10 @@
-from tinyreasoner import chat_api
+import os
+
 import polars as pl
 from huggingface_hub import hf_hub_download
-import os
+
+from tinyreasoner import chat_api
+
 
 def load():
     local_path = hf_hub_download(
@@ -17,12 +20,12 @@ def load():
     for row in df.iter_rows(named=True):
         chats.append([
             chat_api.UserMessage(f"{row['problem']}. Only include the answer in your response."),
-            chat_api.AssistantMessage(row["answer"])
+            chat_api.AssistantMessage(text=row["answer"])
         ])
 
         chats.append([
             chat_api.UserMessage(f"{row['problem']}. Give the solution and the answer."),
-            chat_api.AssistantMessage(f"### Solution\n{row['solution']}\n\n### Answer\n{row['answer']}")
+            chat_api.AssistantMessage(text=f"### Solution\n{row['solution']}\n\n### Answer\n{row['answer']}")
         ])
 
     return chats

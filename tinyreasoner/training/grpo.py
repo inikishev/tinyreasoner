@@ -10,11 +10,11 @@ import tqdm
 from accelerate import Accelerator
 from langchain_core.tools import BaseTool
 from torch.nn import functional as F
+from torchalgos import SPlus
 
 from .. import chat_api
 from ..logger import DictLogger
 from ..models import BaseModel, copy_state_dict
-from ..optim import SPlus
 from ..tokenizer import BaseTokenizer
 
 

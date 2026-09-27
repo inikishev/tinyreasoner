@@ -21,7 +21,7 @@ def load():
         content = content.replace("Provide a justification for your answer.", "")
         chats.append([
             chat_api.UserMessage(f"{content}\nOnly include the answer in your response."),
-            chat_api.AssistantMessage(solution)
+            chat_api.AssistantMessage(text=solution)
         ])
 
     return chats

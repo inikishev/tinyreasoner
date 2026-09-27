@@ -1,7 +1,8 @@
 import polars as pl
-from huggingface_hub import hf_hub_download
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
+
 from tinyreasoner import chat_api
+
 
 def load() -> list[list[chat_api.BaseItem]]:
     local_path = hf_hub_download(
@@ -20,7 +21,7 @@ def load() -> list[list[chat_api.BaseItem]]:
 
         samples.append([
             chat_api.UserMessage(prompt),
-            chat_api.AssistantMessage(output),
+            chat_api.AssistantMessage(text=output),
         ])
 
     return samples

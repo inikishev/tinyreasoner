@@ -11,15 +11,17 @@ from langchain_core.utils.function_calling import convert_to_openai_function
 if TYPE_CHECKING:
     from .tokenizer import BaseTokenizer
 
+
 class InvalidChatError(Exception): pass
 
+
 ItemTypeLiteral = Literal["user", "assistant", "tool_definition", "tool_call"]
-_tab = " "*2
-_vline = "-"*8
+
 
 class TokensAndMask(NamedTuple):
     tokens: list[int]
     mask: list[int]
+
 
 class BaseItem(dict):
     def __repr__(self) -> str:
@@ -44,11 +46,13 @@ class BaseItem(dict):
     def to_dict(self) -> dict:
         return json.loads(json.dumps(self, ensure_ascii=False, sort_keys=False))
 
+
 class BaseTrainableItem(BaseItem, ABC):
     @property
     def trainable(self) -> bool: return self["trainable"]
     @trainable.setter
     def trainable(self, value: bool) -> None: self["trainable"] = value
+
 
 class UserMessage(BaseItem):
     def __init__(self, text: str):
@@ -68,6 +72,7 @@ class UserMessage(BaseItem):
     @text.setter
     def text(self, value: str) -> None: self["text"] = value
 
+
 # ----------------------------------- tools ---------------------------------- #
 class ToolCall(BaseTrainableItem):
     """A tool call.
@@ -76,13 +81,11 @@ class ToolCall(BaseTrainableItem):
         name: Name of the tool.
         arguments: Arguments.
         output: The output of the tool as a string.
-        reasoning: reasoning before calling this tool.
         trainable: Whether to include this tool call in loss calculation.
     """
-    def __init__(self, name:str, arguments: str | dict[str, Any], output: str | None = None, reasoning: str | None = "", trainable: bool = True):
-        if reasoning is None: reasoning = ""
+    def __init__(self, name:str, arguments: str | dict[str, Any], output: str | None = None, trainable: bool = True):
         if isinstance(arguments, str): arguments = json.loads(arguments, strict=False)
-        super().__init__(type="tool_call", name=name, arguments=arguments, output=output, reasoning=reasoning, trainable=trainable)
+        super().__init__(type="tool_call", name=name, arguments=arguments, output=output, trainable=trainable)
 
     @property
     def name(self) -> str: return self["name"]
@@ -103,102 +106,68 @@ class ToolCall(BaseTrainableItem):
     @output.setter
     def output(self, value: str | None): self["output"] = value
 
-    @property
-    def reasoning(self) -> str: return self["reasoning"]
-    @reasoning.setter
-    def reasoning(self, value: str) -> None: self["reasoning"] = value
-
     @classmethod
     def from_dict(cls, d):
         return cls(
             name = d["name"],
             arguments = d["arguments"],
             output = d.get("output", None),
-            reasoning = d.get("reasoning", None),
             trainable = d.get("trainable", True),
         )
 
     def tokenize(self, tokenizer):
 
-        # parse reasoning
-        # NOTE: reasoning start/end tokens are added by AssistantMessage
-        if self.reasoning:
-            reasoning_tokens = tokenizer.encode_text(self.reasoning)
-            reasoning_mask = [int(self.trainable)] * len(reasoning_tokens)
-        else:
-            reasoning_tokens = []
-            reasoning_mask = []
-
         # parse inputs
         name = tokenizer.encode_text(self.name)
         arguments = tokenizer.encode_text(json.dumps(self.arguments, ensure_ascii=False, sort_keys=False))
 
-        input_tokens = (
+        tc_tokens = (
             [tokenizer.tool_call_idx] + name
-            + [tokenizer.tool_call_idx] + arguments
+            + [tokenizer.space_idx] + arguments
             + [tokenizer.end_idx]
         )
-        input_mask = [int(self.trainable)] * len(input_tokens)
+        tc_mask = [int(self.trainable)] * len(tc_tokens)
 
         # parse outputs
         if self.output is not None:
-            output_tokens = tokenizer.encode_text(self.output) + [tokenizer.end_idx]
-            output_mask = [0] * len(output_tokens)
+            tool_output_tokens = tokenizer.encode_text(self.output)
+            tool_output_mask = [0] * len(tool_output_tokens)
         else:
-            output_tokens = []
-            output_mask = []
+            tool_output_tokens = []
+            tool_output_mask = []
 
         # merge
         return TokensAndMask(
-            tokens = reasoning_tokens + input_tokens + output_tokens,
-            mask = reasoning_mask + input_mask + output_mask,
+            tokens = tc_tokens + tool_output_tokens,
+            mask = tc_mask + tool_output_mask,
         )
 
+
 class AssistantMessage(BaseTrainableItem):
-    """An assistant message optionally preceded by tool calls and reasoning.
+    """An assistant message.
 
     Args:
-        text: final conversational text of this message.
-        reasoning: final reasoning after tool calls and before the final conversational message.
-        tool_calls: tool calls. Defaults to None.
+        reasoning: reasoning before tool call and text.
+        text: text displayed to the user (before the tool call).
+        tool_call: tool call. Defaults to None.
         trainable: Whether to include this assistant message and reasoning in loss calculation.
-
-    Example (think):
-    ```python
-    AssistantMessage(
-        tool_calls=[
-            ToolCall(reasoning="I need to list the directory.", name="list_dir", arguments="{}", output=...),
-            ToolCall(reasoning="I see the notes.txt file, now I will read it.", name="read_file", arguments="...", output=...),
-        ],
-        reasoning="I've red the notes, now I will present this information to the user.",
-        text="..."
-    )
-    ```
-
-    Example (instruct):
-    ```python
-    AssistantMessage(
-        tool_calls=[
-            ToolCall(name="list_dir", arguments="{}", output=...),
-            ToolCall(name="read_file", arguments="...", output=...),
-        ],
-        text="..."
-    )
-    ```
     """
 
     def __init__(
         self,
-        text: str,
+        *,
         reasoning: str | None = "",
-        tool_calls: Sequence[ToolCall] | None = None,
+        text: str | None = "",
+        tool_call: ToolCall | None = None,
         trainable: bool = True,
     ):
+        if text is None: text = ""
         if reasoning is None: reasoning = ""
 
-        # convert to ToolCallSets
-        if tool_calls is None: tool_calls = []
-        super().__init__(type="assistant", text=text, reasoning=reasoning, tool_calls=list(tool_calls), trainable=trainable)
+        if text == "" and tool_call is None:
+            raise RuntimeError("Empty assistant message")
+
+        super().__init__(type="assistant", reasoning=reasoning, text=text, tool_call=tool_call, trainable=trainable)
 
     @property
     def text(self) -> str: return self["text"]
@@ -211,68 +180,63 @@ class AssistantMessage(BaseTrainableItem):
     def reasoning(self, value: str) -> None: self["reasoning"] = value
 
     @property
-    def tool_calls(self) -> list[ToolCall]: return self["tool_calls"]
-    @tool_calls.setter
-    def tool_calls(self, value: Sequence[ToolCall]) -> None: self["tool_calls"] = list(value)
+    def tool_call(self) -> ToolCall | None: return self["tool_call"]
+    @tool_call.setter
+    def tool_call(self, value: ToolCall | None) -> None: self["tool_call"] = value
 
     @classmethod
     def from_dict(cls, d):
-        tool_calls = d.get("tool_calls", None)
-        if tool_calls:
-            tool_calls = [ToolCall.from_dict(tc) for tc in tool_calls]
+        tool_call = d.get("tool_call", None)
+        if tool_call:
+            tool_call = ToolCall.from_dict(tool_call)
 
-        return cls(text=d["text"], reasoning=d.get("reasoning", None), tool_calls=tool_calls, trainable=d.get("trainable", True))
+        return cls(reasoning=d.get("reasoning", None), text=d.get("text", None), tool_call=tool_call, trainable=d.get("trainable", True))
 
     def tokenize(self, tokenizer):
         trainable = int(self.trainable)
 
+        # tokenize reasoning
+        reasoning_tokens = []
+        reasoning_mask = []
+        if self.reasoning:
+            reasoning_tokens = [tokenizer.think_idx] + tokenizer.encode_text(self.reasoning) + [tokenizer.think_idx]
+            reasoning_mask = [0] + [trainable] * (len(reasoning_tokens) - 1)
+
         # tokenize text
         if self.text:
-            final_tokens = tokenizer.encode_text(self.text) + [tokenizer.end_idx]
-            final_mask = [trainable] * len(final_tokens)
+            text_tokens = tokenizer.encode_text(self.text)
+            text_mask = [trainable] * len(text_tokens)
         else:
-            final_tokens = []
-            final_mask = []
+            text_tokens = []
+            text_mask = []
 
-        # tokenize tool calls
-        tools_tokens = []
-        tools_mask = []
-        tool_calls_ended = True
-        for i, tc in enumerate(self.tool_calls):
-            tc_tokens, tc_mask = tc.tokenize(tokenizer)
-            tools_tokens.extend(tc_tokens)
-            tools_mask.extend(tc_mask)
-            if tc.output is None:
-                if i != len(self.tool_calls) - 1:
-                    raise InvalidChatError("Only last tool call on last assistant message can have no output attribute.")
-                tool_calls_ended = False # tools_tokens doesn't end with <END><TOOL_CALL> tokens
+        # tokenize tool call or final [END]
+        tc_or_end_tokens = []
+        tc_or_end_mask = []
 
-        if not tool_calls_ended:
-            if self.text or self.reasoning:
-                raise InvalidChatError("Last tool call has no tool output, but the assistant message has text or reasoning.")
+        if self.tool_call is None:
+            tc_or_end_tokens = [tokenizer.end_idx]
+            tc_or_end_mask = [trainable]
+        else:
+            # [TC] name arguments [END] output
+            tc_or_end_tokens, tc_or_end_mask = self.tool_call.tokenize(tokenizer)
 
-        # we tokenize differently in think and instruct modes
-        # in think mode, tool calls happen within think block
-        if bool(self.reasoning):
-            reasoning_tokens = tokenizer.encode_text(self.reasoning)
-            reasoning_mask = [trainable] * len(reasoning_tokens)
+        # full tokenized message:
 
-            tokens = [tokenizer.assistant_idx, tokenizer.think_idx] + tools_tokens + reasoning_tokens
-            mask = [0, 0] + tools_mask + reasoning_mask
+        # [ASSISTANT]
+        # [THINK] reasoning [THINK]
+        # text
+        # [TC] name arguments [END] output
 
-            if tool_calls_ended:
-                tokens.append(tokenizer.think_idx)
-                mask.append(trainable)
+        # or:
 
-                tokens.extend(final_tokens)
-                mask.extend(final_mask)
+        # [ASSISTANT]
+        # [THINK] reasoning [THINK]
+        # text [END]
 
-            return TokensAndMask(tokens=tokens, mask=mask)
-
-        # instruct mode
         return TokensAndMask(
-            tokens = [tokenizer.assistant_idx] + tools_tokens + final_tokens,
-            mask = [0] + tools_mask + final_mask,
+            tokens = [tokenizer.assistant_idx] + reasoning_tokens + text_tokens + tc_or_end_tokens,
+            mask =   [0]                       + reasoning_mask   + text_mask   + tc_or_end_mask,
         )
 
 
@@ -342,12 +306,12 @@ def validate_chat(items: Sequence[AnyItem]):
     Rules:
     - Chat starts with ToolDefinitions or UserMessage
     - No two AssistantMessages in a row
-    - either all AssistantMessages and ToolCalls should have reasoning (think mode), or none should (instruct mode)
+    - either all AssistantMessages should have reasoning (think mode), or none should (instruct mode)
     - All tool calls should have tool outputs
     - Last item should be trainable (if last item is UserMessage, it contributes nothing to the loss and just increases train time)
 
     Special case:
-    - A sample can end with a pending tool call (no output) or on a finished tool call without the final conversational message. End tokens are not added during tokenization, therefore this message and tool call must be last.
+    - The last assistant message can end with a pending tool call (no output).
     """
 
     items = [to_item(i) for i in items]
@@ -370,7 +334,7 @@ def validate_chat(items: Sequence[AnyItem]):
         else:
             if is_tool_defs and not isinstance(item, UserMessage):
                 if i == 0: raise InvalidChatError("First message must be either a tool definition or a user message.")
-                else: raise InvalidChatError(f"The first item after ToolDefinition must be UserMessage, but got {type(item)}.")
+                else: raise InvalidChatError(f"The first item after tool definitions must be UserMessage, but got {type(item)}.")
             is_tool_defs = False
 
     # check duplicate tool names
@@ -378,10 +342,10 @@ def validate_chat(items: Sequence[AnyItem]):
     if len(available_tools) != len(set(available_tools)):
         raise InvalidChatError(f"There are duplicate tools: {available_tools}")
 
-    # check no assistant messages in a row
+    # check assistant message after final assistant message
     for i, (item1, item2) in enumerate(itertools.pairwise(items)):
-        if isinstance(item1, AssistantMessage) and isinstance(item2, AssistantMessage):
-            raise InvalidChatError(f"There are two assistant messages in a row at indexes {i}, {i+1}.")
+        if isinstance(item1, AssistantMessage) and isinstance(item2, AssistantMessage) and item1.tool_call is None:
+            raise InvalidChatError(f"AssistantMessage at index {i} has no tool calls (final message), but next message ({i+1}) is AssistantMessage.")
 
     # check reasoning
     is_think = None
@@ -393,62 +357,36 @@ def validate_chat(items: Sequence[AnyItem]):
     if is_think is None:
         raise InvalidChatError(f"The chat contains no assistant messages: {[type(i) for i in items]}.")
 
-    for i_item, item in enumerate(items):
-        is_last_message = (i_item == len(items) - 1)
+    for i, item in enumerate(items):
+        is_last_message = (i == len(items) - 1)
 
         if isinstance(item, AssistantMessage):
 
-            # NOTE: for training we allow last assistant message to only contain tool calls with no outputs
-            # or tool calls but no assistant message, in that case it is tokenized with no end tokens.
+            if is_think and not item.reasoning:
+                raise InvalidChatError("Either all items should have reasoning, or none should, "
+                                        "but got assistant messages with and without reasoning.")
 
-            if is_last_message and is_think:
-                if item.text and not item.reasoning:
-                    raise InvalidChatError("First assistant message has reasoning, but last assistant message "
-                                           "has a conversational output without reasoning.")
-
-            else:
-                if bool(item.reasoning) != is_think:
-                    raise InvalidChatError("Either all items should have reasoning, or none should, "
-                                           "but got assistant messages with and without reasoning.")
-
-            if len(item.tool_calls) > 0 and item.tool_calls[-1].output is None:
-                if item.text or item.reasoning:
-                    raise InvalidChatError("Last tool call in assistant message is pending (has no output), "
-                                           "but the assistant message has text or reasoning.")
-
-            for i_tc, tc in enumerate(item.tool_calls):
-                is_last_tc = i_tc == len(item.tool_calls) - 1
+            # check tool call
+            if item.tool_call is not None:
+                tc = item.tool_call
 
                 # check that tool is defined
                 if tc.name not in available_tools:
                     raise InvalidChatError(
                         f"ToolCall has name={tc.name}, but no tools with that name are defined. Defined tools: {available_tools}")
 
-                # check that all tool calls contain tool outputs, unless its the last message
-                if tc.output is None:
-                    if is_last_message:
-                        if not is_last_tc:
-                            # on last message, only last tool call can have no output
-                            raise InvalidChatError(f"Non-last ToolCall {i_tc} on last message for tool "
-                                                   f"`{tc.name}` has no `output` attribute set.")
-
-                    else:
-                        raise InvalidChatError(f"Tool call {i_tc} for tool `{tc.name}` has no `output` attribute set.")
-
-                if bool(tc.reasoning) != is_think and not (is_last_message and is_last_tc):
-                    raise InvalidChatError("Either all assistant messages and tool calls should have reasoning, or none should, "
-                                           f"but ToolCall {i_tc} for tool `{tc.name}` doesn't match.")
-
+                # ensure all tool calls have outputs, ignoring last message
+                if (not is_last_message) and (tc.output is None):
+                    raise InvalidChatError(f"AssistantMessage at index {i} is not last, but has tool call `{tc.name}` with no outputs.")
 
                 # check empty strings
                 if len(tc.name) == 0 or len(tc.arguments) == 0 or (tc.output is not None and len(tc.output) == 0):
                     raise InvalidChatError(
-                        f"ToolCall {i_tc} for tool `{tc.name}` has an empty string in of `name`, `arguments` or `output`.")
-
+                        f"AssistantMessage at index {i} has tool call `{tc.name}` with empty string in one of `name`, `arguments` or `output`.")
 
     # check that last item is trainable
     if not items[-1].get('trainable', False):
-        raise InvalidChatError(f"Last item in the chat is not trainable: {type(items[-1])}.")
+        raise InvalidChatError(f"Last item in the chat is not trainable: {[type(i) for i in items]}.")
 
     # check that there are any trainable items
     for item in items:
@@ -459,19 +397,20 @@ def validate_chat(items: Sequence[AnyItem]):
 
     # check that messages are not empty
     for i, item in enumerate(items):
-        if isinstance(item, (AssistantMessage, UserMessage)):
-            if len(item.text.strip()) == 0:
-                if i != len(items) - 1: # last assistant message can have empty text
-                    raise InvalidChatError(f"Item contains empty text: {item.to_dict()}")
+        if isinstance(item, UserMessage) and len(item.text.strip()) == 0:
+            raise InvalidChatError(f"UserMessage at index {i} contains empty text.")
+
+        if isinstance(item, AssistantMessage) and len(item.text.strip()) == 0 and item.tool_call is None:
+            raise InvalidChatError(f"AssistantMessage at index {i} contains empty text and no tool calls.")
 
         if isinstance(item, ToolDefinition):
             if len(item.name) == 0 or len(item.description) == 0:
-                raise InvalidChatError(f"ToolDefinition contains empty name or description: {item.to_dict()}")
+                raise InvalidChatError(f"ToolDefinition `{item.name}` contains empty name or description: {item.to_dict()}")
 
     # TODO check tokenization
     # we need to implement a detokenizer to Items for this first
 
-class InvalidOpenAIChatError(Exception): pass
+class InvalidCustomChatError(Exception): pass
 
 def _parse_content(content: str | list | None | Any):
     if content is None:
@@ -479,18 +418,19 @@ def _parse_content(content: str | list | None | Any):
 
     if isinstance(content, list):
         if any('text' not in el for el in content):
-            raise InvalidOpenAIChatError("User message contains non-text content.")
+            raise InvalidCustomChatError("User message contains non-text content.")
         content = '\n'.join(el['text'] for el in content).strip()
 
     if not isinstance(content, str):
-        raise InvalidOpenAIChatError(f"Content is not a string or a list, but {type(content)}:\n{content}")
+        raise InvalidCustomChatError(f"Content is not a string or a list, but {type(content)}:\n{content}")
 
     if len(content.strip()) == 0:
         return None
 
     return content.strip()
 
-def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, strip_reasoning: bool = False) -> list[BaseItem]:
+
+def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, remove_reasoning: bool = False, allow_multiple_tool_calls: bool = False) -> list[BaseItem]:
     """Convert a chat completions dictionary to Items."""
     items: list[BaseItem] = []
 
@@ -516,26 +456,22 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
             )
 
     # parse messages
-    tcs_to_add: list[ToolCall] = []
-
     for i, message in enumerate(chat["messages"]):
         if isinstance(message, str): message = json.loads(message.strip(), strict=False)
 
         # we only have user
         if message["role"] in ("user", "developer", "system"):
-            if len(tcs_to_add) != 0:
-                raise InvalidOpenAIChatError("Chat contains assistant message with tool calls but no conversational text.")
-
             user_content = _parse_content(message["content"])
 
             if user_content is None:
-                raise InvalidOpenAIChatError("User message contains no content")
+                raise InvalidCustomChatError("User message contains no content")
 
             items.append(UserMessage(user_content.strip()))
 
         elif message["role"] == "assistant":
+
             if len(items) == 0:
-                raise InvalidOpenAIChatError(
+                raise InvalidCustomChatError(
                     "Chat starts from assistant message:\n",
                     f"{json.dumps(chat['messages'], sort_keys=False, ensure_ascii=False, indent=4)}",
                 )
@@ -555,17 +491,14 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
                         assert "name" in tc, tc
                         tc = {"function": tc}
 
-                    # Add tool call item first
                     tc_name = tc["function"]["name"]
                     tc_arguments = tc["function"]["arguments"]
                     if not isinstance(tc_arguments, str):
                         tc_arguments = json.dumps(tc_arguments, ensure_ascii=False, sort_keys=False)
 
-                    # Now add tool output immediately after the tool call
-                    # we either have an ID, or have to select by function name
                     if tc_id is None:
                         if require_tc_id:
-                            raise InvalidOpenAIChatError(
+                            raise InvalidCustomChatError(
                                 f"Tool call id (key 'id') missing:\n"
                                 f"{json.dumps(message, sort_keys=False, ensure_ascii=False, indent=4)}\n"
                             )
@@ -573,7 +506,7 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
 
                     # check that tool call name exists
                     if tc_name not in defined_tools:
-                        raise InvalidOpenAIChatError(
+                        raise InvalidCustomChatError(
                             f"{tc} is not defined in {defined_tools}:\n",
                             f"{json.dumps(chat, sort_keys=False, ensure_ascii=False, indent=4)}",
                         )
@@ -588,7 +521,7 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
                         tool_messages.append(next_message)
 
                     if len(tool_messages) == 0:
-                        raise InvalidOpenAIChatError(
+                        raise InvalidCustomChatError(
                             f"There are no tool messages after tool call:\n"
                             f"{json.dumps(chat['messages'], sort_keys=False, ensure_ascii=False, indent=4)}"
                         )
@@ -599,14 +532,14 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
                         # to avoid ambiguity
                         tool_names = [tm["name"] for tm in tool_messages]
                         if tc_name not in tool_names:
-                            raise InvalidOpenAIChatError(
+                            raise InvalidCustomChatError(
                                 f"Tool call has no id and has name {tc_name}, and "
                                 f"there is no tool message with that name, found names: {tool_names}\n"
                                 f"{json.dumps(message, sort_keys=False, ensure_ascii=False, indent=4)}"
                             )
 
                         if tool_names.count(tc_name) > 1:
-                            raise InvalidOpenAIChatError(
+                            raise InvalidCustomChatError(
                                 f"Tool call is ambiguous: has no id and has name {tc_name}, but "
                                 f"multiple tool messages are using this name: {tool_names}\n"
                             )
@@ -631,7 +564,7 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
                                 break
 
                         if tool_message is None:
-                            raise InvalidOpenAIChatError(
+                            raise InvalidCustomChatError(
                                 f"Tool call id is {tc_id}, but there is no tool message with that id."
                                 f"Seen ids: {seen_ids}"
                             )
@@ -639,69 +572,46 @@ def convert_from_chat_completions_api(chat: dict, require_tc_id: bool = True, st
                     # add ToolCall item
                     tc_output = _parse_content(tool_message["content"])
                     if tc_output is None:
-                        raise InvalidOpenAIChatError(f"Tool message contains no content: {tool_message}")
+                        raise InvalidCustomChatError(f"Tool message contains no content: {tool_message}")
 
                     tool_calls.append(ToolCall(name=tc_name, arguments=tc_arguments, output=tc_output))
 
 
-            # if there are no tool calls, reasoning is for the assistant message;
-            # otherwise reasoning is for the tool calls
-            if strip_reasoning: reasoning_content = ""
+            if remove_reasoning: reasoning_content = ""
             else: reasoning_content = message.get("reasoning_content", "")
             assistant_content = _parse_content(message.get("content", ""))
 
-            if len(tool_calls) == 0:
-                if assistant_content is None:
-                    raise InvalidOpenAIChatError(f"Assistant message contains no content or tool calls: {message}")
+            # First assistant message contains reasoning and text
+            items.append(AssistantMessage(
+                reasoning=reasoning_content,
+                text=assistant_content,
+                tool_call=tool_calls[0] if len(tool_calls) > 0 else None,
+            ))
 
-                if isinstance(items[-1], AssistantMessage):
-                    # this happens when model calls tools and outputs conversational messages after each tool call
-                    # since we call tools within reasoning block, we can't use that for training
-                    raise InvalidOpenAIChatError("Got two assistant messages with content in a row.")
+            # Add assistant messages with extra tool calls
+            # With our tokenization the model immediately sees tool output before calling next tool
+            # which might not make sense for OpenAI format where model can call multiple tools at once
+            # Therefore we disallow this by default
+            if len(tool_calls) > 1:
+                if not allow_multiple_tool_calls:
+                    raise InvalidCustomChatError(f"Assistant message has more than one tool call: {[tc.name for tc in tool_calls]}")
 
-                assistant_message = AssistantMessage(
-                    text=assistant_content,
-                    reasoning=reasoning_content,
-                    tool_calls=tcs_to_add.copy(),
-                )
-                items.append(assistant_message)
-                tcs_to_add.clear()
-
-            else:
-                if not strip_reasoning:
-                    tool_calls[0].reasoning = reasoning_content
-
-                # in chat completions assistant message might contain no content, only tool calls
-                # in which case we save it for later
-                if assistant_content is None:
-                    tcs_to_add.extend(tool_calls)
-
-                else:
-                    if isinstance(items[-1], AssistantMessage):
-                        raise InvalidOpenAIChatError("Got two assistant messages with content in a row.")
-
-                    assistant_message = AssistantMessage(text=assistant_content, tool_calls=tool_calls + tcs_to_add.copy())
-                    items.append(assistant_message)
-                    tcs_to_add.clear()
+                for tc in tool_calls[1:]:
+                    items.append(AssistantMessage(tool_call=tc))
 
 
         elif message['role'] == "tool":
             continue # handled in assistant message
 
         else:
-            raise InvalidOpenAIChatError(
+            raise InvalidCustomChatError(
                 f"Unknown role {message['role']} in message:"
                 f"{json.dumps(message, sort_keys=False, ensure_ascii=False, indent=4)}"
             )
 
-    if tcs_to_add:
-        # add pending tool call
-        items.append(AssistantMessage(text="", reasoning="", tool_calls=tcs_to_add))
-
     validate_chat(items)
     return items
 
-class InvalidShareGPTChatError(Exception): pass
 
 def convert_from_sharegpt(chat: list[dict], system="system", user="human", assistant="gpt", role_key="from", content_key="value"):
     items: list[BaseItem] = []
@@ -709,12 +619,10 @@ def convert_from_sharegpt(chat: list[dict], system="system", user="human", assis
     for message in chat:
         role = message[role_key]
         content = message[content_key]
-        if role == system or role == user:
-            items.append(UserMessage(content))
-        elif role == assistant:
+        if role == system or role == user or role == assistant:
             items.append(UserMessage(content))
         else:
-            raise InvalidShareGPTChatError(f"Unknown role: {role}")
+            raise InvalidCustomChatError(f"Unknown role: {role}")
 
     validate_chat(items)
     return items
@@ -725,7 +633,7 @@ def convert_openai_dataset(chats: list[dict], require_tc_id: bool, verbose: bool
     for chat in chats:
         try:
             samples.append(convert_from_chat_completions_api(chat, require_tc_id=require_tc_id))
-        except (InvalidOpenAIChatError, InvalidChatError) as e:
+        except (InvalidCustomChatError, InvalidChatError) as e:
             if verbose: print(e)
 
     return samples
@@ -736,7 +644,7 @@ def convert_sharegpt_dataset(chats: list[list[dict]], system="system", user="hum
     for chat in chats:
         try:
             samples.append(convert_from_sharegpt(chat, system=system, user=user, assistant=assistant, role_key=role_key, content_key=content_key))
-        except (InvalidOpenAIChatError, InvalidChatError) as e:
+        except (InvalidCustomChatError, InvalidChatError) as e:
             if verbose: print(e)
 
     return samples
@@ -749,10 +657,11 @@ def deduplicate(dataset: Sequence[Sequence[AnyItem]]) -> list[list[BaseItem]]:
     for chat in dataset:
         chat = [to_item(i) for i in chat]
 
-        # deduplicate should only differentiate reasoning vs no reasoning
+        # deduplicate should only remove duplicate samples even if they have different reasoning
+        # but shoudn't remove versions of same sample with and without reasoning
         chat_copy = copy.deepcopy(chat)
         for item in chat_copy:
-            if "reasoning" in item and item["reasoning"]:
+            if item.get("reasoning", False):
                 item["reasoning"] = "__reasoning__"
 
         chat_json = json.dumps(chat_copy, ensure_ascii=False,sort_keys=True)

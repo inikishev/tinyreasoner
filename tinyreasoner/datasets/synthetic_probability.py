@@ -1,8 +1,8 @@
 """Should be correct, validated by Qwen3.7Plus."""
 
-import random
-import math
 import fractions
+import math
+import random
 
 from .. import chat_api
 
@@ -328,7 +328,7 @@ def _make_sample(question: str, answer: str, rng: random.Random) -> list[chat_ap
 
     return [
         chat_api.UserMessage(f"{question} Only include the answer in your response."),
-        chat_api.AssistantMessage(answer),
+        chat_api.AssistantMessage(text=answer),
     ]
 
 

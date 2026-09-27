@@ -22,7 +22,7 @@ def load_w_choices():
         choices_str = ' - ' + '\n - '.join(choices)
         items = [
             chat_api.UserMessage(f"{question}. Write out the correct choice:\n{choices_str}"),
-            chat_api.AssistantMessage(f"{answer}"),
+            chat_api.AssistantMessage(text=f"{answer}"),
         ]
 
         samples.append(items)
@@ -49,7 +49,7 @@ def load_w_numbered_choices():
 
         items = [
             chat_api.UserMessage(f"{question}. Write the number of the correct choice :{choices_str}"),
-            chat_api.AssistantMessage(f"{answer + 1}"),
+            chat_api.AssistantMessage(text=f"{answer + 1}"),
         ]
 
         samples.append(items)
@@ -73,7 +73,7 @@ def load_w_o_choices():
 
         items = [
             chat_api.UserMessage(question),
-            chat_api.AssistantMessage(answer),
+            chat_api.AssistantMessage(text=answer),
         ]
 
         samples.append(items)

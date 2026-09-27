@@ -1,7 +1,7 @@
 """All are definitely correct, validated through executing the functions."""
-import random
 import contextlib
 import io
+import random
 
 from .. import chat_api
 
@@ -529,7 +529,7 @@ def _make_sample(question: str, answer: str) -> list[chat_api.BaseItem]:
 
     return [
         chat_api.UserMessage(f"{question} Only include the answer in your response."),
-        chat_api.AssistantMessage(answer),
+        chat_api.AssistantMessage(text=answer),
     ]
 
 

@@ -1,6 +1,8 @@
+import os
+
 import torch
 import torch.backends.opt_einsum
-import os
+
 
 def performance_tweaks(
     cudnn_bench: bool | None,

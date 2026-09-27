@@ -1,6 +1,9 @@
+import json
+import re
+
 import polars as pl
 from huggingface_hub import hf_hub_download
-import json, re
+
 from .. import chat_api
 
 _tc_extract = r"<tool_call>\s*(.*?)\s*</tool_call>"

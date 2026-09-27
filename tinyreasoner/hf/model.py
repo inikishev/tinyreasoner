@@ -1,8 +1,11 @@
+from typing import Literal
+
 from torch import nn
 from transformers import PreTrainedConfig, PreTrainedModel
-from typing import Literal
+
 from ..models import models, rnn
 from ..tokenizer import BaseTokenizer, _default_special_tokens
+
 
 class DummyTokenizer(BaseTokenizer):
     def __init__(self, vocab_size):

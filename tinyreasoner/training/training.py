@@ -1,7 +1,7 @@
-import warnings
-import traceback
 import itertools
 import random
+import traceback
+import warnings
 from collections.abc import Sequence
 
 import numpy as np
@@ -9,11 +9,12 @@ import torch
 import tqdm
 from accelerate import Accelerator
 from torch.nn import functional as F
+from torchalgos import SPlus
 
+from .. import chat_api
 from ..logger import DictLogger
 from ..models import BaseModel, copy_state_dict
-from ..optim import SPlus
-from .. import chat_api
+
 
 class Pretrainer:
     model: BaseModel

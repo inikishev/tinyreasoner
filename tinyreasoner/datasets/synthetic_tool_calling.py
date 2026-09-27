@@ -1,10 +1,14 @@
 """Should be correct, validated by Qwen3.7Plus."""
 
-import random
 import json
 import math
+import random
+
+import wonderwords
 
 from .. import chat_api
+
+random_word = wonderwords.RandomWord()
 
 
 
@@ -259,11 +263,10 @@ def _gen_calculator_single(rng: random.Random):
     if op == "+": result = a + b
     elif op == "-": result = a - b
     else: result = a * b
-    expr = f"{a} {op} {b}"
     return (
         f"What is {a} {op} {b}?",
-        [{"name": "calculator", "arguments": {"expression": expr}, "output": str(result)}],
-        f"The result of {expr} is {result}.",
+        [(f"I'll use calculator tool to compute {a} {op} {b}.",{"name": "calculator", "arguments": {"expression": f"{a}{op}{b}"}, "output": str(result)})],
+        f"The result of {a} {op} {b} is {result}.",
     )
 
 
@@ -271,39 +274,35 @@ def _gen_calculator_complex(rng: random.Random):
     a = rng.randint(1, 50)
     b = rng.randint(1, 20)
     c = rng.randint(1, 10)
-    expr = f"({a} + {b}) * {c}"
     result = (a + b) * c
     return (
         f"Calculate ({a} + {b}) * {c}.",
-        [{"name": "calculator", "arguments": {"expression": expr}, "output": str(result)}],
-        f"The result of {expr} is {result}.",
+        [(f"I'll use calculator tool to compute ({a} + {b}) * {c}.",{"name": "calculator", "arguments": {"expression": f"({a}+{b})*{c}"}, "output": str(result)})],
+        f"The result of ({a} + {b}) * {c} is {result}.",
     )
 
 
 def _gen_string_operations(rng: random.Random):
-    words = ["hello", "world", "python", "code", "data", "test", "example", "sample"]
-    text = rng.choice(words)
+    text = ' '.join(random_word.word() for _ in range(rng.randint(1, 10)))
     return (
         f"What is the length of the string \"{text}\"?",
-        [{"name": "string_length", "arguments": {"text": text}, "output": str(len(text))}],
+        [("I'll use `string_length` tool to find the length of the string.",{"name": "string_length", "arguments": {"text": text}, "output": str(len(text))})],
         f"The string \"{text}\" has {len(text)} characters.",
     )
 
 
 def _gen_reverse_string(rng: random.Random):
-    words = ["hello", "world", "python", "racecar", "level", "madam"]
-    text = rng.choice(words)
+    text = ' '.join(random_word.word() for _ in range(rng.randint(1, 10)))
     reversed_text = text[::-1]
     return (
         f"Reverse the string \"{text}\".",
-        [{"name": "reverse_string", "arguments": {"text": text}, "output": reversed_text}],
+        [("I'll use `reverse_string` tool to reverse the string.", {"name": "reverse_string", "arguments": {"text": text}, "output": reversed_text})],
         f"The reverse of \"{text}\" is \"{reversed_text}\".",
     )
 
 
 def _gen_case_conversion(rng: random.Random):
-    words = ["hello world", "Python Code", "DATA science", "test Example"]
-    text = rng.choice(words)
+    text = ' '.join(random_word.word() for _ in range(rng.randint(1, 10)))
     if rng.random() < 0.5:
         tool_name = "uppercase"
         result = text.upper()
@@ -314,24 +313,17 @@ def _gen_case_conversion(rng: random.Random):
         action = "lowercase"
     return (
         f"Convert \"{text}\" to {action}.",
-        [{"name": tool_name, "arguments": {"text": text}, "output": result}],
+        [(f"I'll use `{tool_name}` tool to convert the string to {action}.", {"name": tool_name, "arguments": {"text": text}, "output": result})],
         f"The {action} of \"{text}\" is \"{result}\".",
     )
 
 
 def _gen_count_words(rng: random.Random):
-    sentences = [
-        "the quick brown fox",
-        "a cat sat on the mat",
-        "machine learning is fun",
-        "I love programming in Python",
-        "the early bird catches the worm",
-    ]
-    text = rng.choice(sentences)
+    text = ' '.join(random_word.word() for _ in range(rng.randint(1, 20)))
     count = len(text.split())
     return (
         f"How many words are in \"{text}\"?",
-        [{"name": "count_words", "arguments": {"text": text}, "output": str(count)}],
+        [("I'll use `count_words` tool to count the number of words.",{"name": "count_words", "arguments": {"text": text}, "output": str(count)})],
         f"There are {count} words in the text.",
     )
 
@@ -345,7 +337,7 @@ def _gen_weather(rng: random.Random):
     temp = rng.randint(-10, 40)
     return (
         f"What's the weather like in {city}?",
-        [{"name": "lookup_weather", "arguments": {"city": city}, "output": f"{condition}, {temp}°C"}],
+        [(f"I'll use `lookup_weather` tool to look up the weather in {city}.", {"name": "lookup_weather", "arguments": {"city": city}, "output": f"{condition}, {temp}°C"})],
         f"The weather in {city} is {condition} with a temperature of {temp}°C.",
     )
 
@@ -363,7 +355,7 @@ def _gen_population(rng: random.Random):
     pop = cities[city]
     return (
         f"What is the population of {city}?",
-        [{"name": "lookup_population", "arguments": {"city": city}, "output": pop}],
+        [(f"I'll use `lookup_population` tool to look up the population in {city}.", {"name": "lookup_population", "arguments": {"city": city}, "output": pop})],
         f"The population of {city} is {pop}.",
     )
 
@@ -379,7 +371,7 @@ def _gen_distance(rng: random.Random):
     c1, c2, dist = rng.choice(city_pairs)
     return (
         f"How far is it from {c1} to {c2}?",
-        [{"name": "distance_between", "arguments": {"city1": c1, "city2": c2}, "output": f"{dist} km"}],
+        [(f"I'll use `distance_between` tool to find the distance between {c1} and {c2}.", {"name": "distance_between", "arguments": {"city1": c1, "city2": c2}, "output": f"{dist} km"})],
         f"The distance from {c1} to {c2} is {dist} km.",
     )
 
@@ -393,7 +385,7 @@ def _gen_currency(rng: random.Random):
     converted = round(amount * rates[to_cur] / rates[from_cur], 2)
     return (
         f"Convert {amount} {from_cur} to {to_cur}.",
-        [{"name": "convert_currency", "arguments": {"amount": amount, "from_currency": from_cur, "to_currency": to_cur}, "output": f"{converted} {to_cur}"}],
+        [("I'll use `convert_currency` tool to find convert the currency.", {"name": "convert_currency", "arguments": {"amount": amount, "from_currency": from_cur, "to_currency": to_cur}, "output": f"{converted} {to_cur}"})],
         f"{amount} {from_cur} is equal to {converted} {to_cur}.",
     )
 
@@ -409,7 +401,7 @@ def _gen_is_prime(rng: random.Random):
         answer = "false"
     return (
         f"Is {n} a prime number?",
-        [{"name": "is_prime", "arguments": {"number": n}, "output": answer}],
+        [(f"I'll use `is_prime` tool to check if {n} is prime.",{"name": "is_prime", "arguments": {"number": n}, "output": answer})],
         f"Yes, {n} is a prime number." if answer == "true" else f"No, {n} is not a prime number.",
     )
 
@@ -419,20 +411,20 @@ def _gen_factorial(rng: random.Random):
     result = math.factorial(n)
     return (
         f"What is {n} factorial?",
-        [{"name": "factorial", "arguments": {"n": n}, "output": str(result)}],
+        [(f"I'll use `factorial` tool to calculate {n} factorial.",{"name": "factorial", "arguments": {"n": n}, "output": str(result)})],
         f"{n}! = {result}.",
     )
 
 
 def _gen_fibonacci(rng: random.Random):
-    n = rng.randint(0, 20)
+    n = rng.randint(0, 100)
     fibs = [0, 1]
     for _ in range(2, n + 1):
         fibs.append(fibs[-1] + fibs[-2])
     result = fibs[n]
     return (
         f"What is the {n}th Fibonacci number?",
-        [{"name": "fibonacci", "arguments": {"n": n}, "output": str(result)}],
+        [(f"I'll use `fibonacci` tool to find {n}th Fibonacci number.",{"name": "fibonacci", "arguments": {"n": n}, "output": str(result)})],
         f"The {n}th Fibonacci number is {result}.",
     )
 
@@ -445,22 +437,24 @@ def _gen_sort(rng: random.Random):
     result_str = json.dumps(sorted_nums)
     return (
         f"Sort this list of numbers: {nums_str}",
-        [{"name": "sort_list", "arguments": {"numbers": numbers}, "output": result_str}],
+        [("I'll use `sort_list` tool to sort the list.",{"name": "sort_list", "arguments": {"numbers": numbers}, "output": result_str})],
         f"The sorted list is {result_str}.",
     )
 
 
 def _gen_list_contains(rng: random.Random):
-    items = rng.sample(["apple", "banana", "cherry", "date", "elderberry", "fig", "grape"], rng.randint(3, 5))
+    items = [random_word.word() for _ in range(rng.randint(3, 20))]
     if rng.random() < 0.7:
         value = rng.choice(items)
         output = "true"
     else:
-        value = rng.choice(["kiwi", "lemon", "mango", "orange"])
+        value = random_word.word()
+        while value in items: value = random_word.word()
         output = "false"
+
     return (
         f"Does the list {items} contain \"{value}\"?",
-        [{"name": "list_contains", "arguments": {"list": items, "value": value}, "output": output}],
+        [(f"I'll use `list_contains` tool to check if the list contains \"{value}\".",{"name": "list_contains", "arguments": {"list": items, "value": value}, "output": output})],
         f"{'Yes' if output == 'true' else 'No'}, the list {'contains' if output == 'true' else 'does not contain'} \"{value}\".",
     )
 
@@ -471,7 +465,7 @@ def _gen_user_info(rng: random.Random):
     name = rng.choice(names)
     return (
         f"Get info for user {user_id}.",
-        [{"name": "get_user_info", "arguments": {"user_id": user_id}, "output": f"{{\"name\": \"{name}\", \"id\": {user_id}}}"}],
+        [(f"I'll use `get_user_info` tool to get user info for user {user_id}.",{"name": "get_user_info", "arguments": {"user_id": user_id}, "output": f"{{\"name\": \"{name}\", \"id\": {user_id}}}"})],
         f"User {user_id} is named {name}.",
     )
 
@@ -488,7 +482,7 @@ def _gen_send_notification(rng: random.Random):
     message = rng.choice(messages)
     return (
         f"Send a notification to user {user_id} saying \"{message}\".",
-        [{"name": "send_notification", "arguments": {"user_id": user_id, "message": message}, "output": "sent"}],
+        [("I'll use `send_notification` tool to send a notification.",{"name": "send_notification", "arguments": {"user_id": user_id, "message": message}, "output": "sent"})],
         f"Notification sent to user {user_id}: \"{message}\".",
     )
 
@@ -509,7 +503,7 @@ def _gen_create_reminder(rng: random.Random):
     time_str = f"2024-{month:02d}-{day:02d} {hour:02d}:00"
     return (
         f"Remind user {user_id} to \"{text}\" on {time_str}.",
-        [{"name": "create_reminder", "arguments": {"user_id": user_id, "text": text, "time": time_str}, "output": "created"}],
+        [("I'll use `create_reminder` tool to create a reminder.",{"name": "create_reminder", "arguments": {"user_id": user_id, "text": text, "time": time_str}, "output": "created"})],
         f"Reminder created for user {user_id}: \"{text}\" at {time_str}.",
     )
 
@@ -524,7 +518,7 @@ def _gen_date_info(rng: random.Random):
     is_weekend = dt.weekday() >= 5
     return (
         f"What day of the week is {date_str}?",
-        [{"name": "get_date_info", "arguments": {"date": date_str}, "output": f"{day_name}, {'weekend' if is_weekend else 'weekday'}"}],
+        [(f"I'll use `get_date_info` tool to find date of week of {date_str}.",{"name": "get_date_info", "arguments": {"date": date_str}, "output": f"{day_name}, {'weekend' if is_weekend else 'weekday'}"})],
         f"{date_str} is a {day_name} ({'weekend' if is_weekend else 'weekday'}).",
     )
 
@@ -533,12 +527,12 @@ def _gen_format_number(rng: random.Random):
     number = rng.uniform(1000, 999999)
     decimals = rng.choice([1, 2, 3, 4, 5])
     if decimals == 0:
-        formatted = f"{int(round(number)):,}"
+        formatted = f"{round(number):,}"
     else:
         formatted = f"{number:,.{decimals}f}"
     return (
         f"Format the number {round(number, decimals)} with commas and {decimals} decimal places.",
-        [{"name": "format_number", "arguments": {"number": round(number, decimals), "decimals": decimals}, "output": formatted}],
+        [("I'll use `format_number` tool to format the number.",{"name": "format_number", "arguments": {"number": round(number, decimals), "decimals": decimals}, "output": formatted})],
         f"The formatted number is {formatted}.",
     )
 
@@ -551,23 +545,23 @@ def _gen_multi_step_calc(rng: random.Random):
     return (
         f"Add {a} and {b}, then multiply the result by 2.",
         [
-            {"name": "calculator", "arguments": {"expression": f"{a} + {b}"}, "output": str(sum_result)},
-            {"name": "calculator", "arguments": {"expression": f"{sum_result} * 2"}, "output": str(product_result)},
+            (f"First, I'll use calculator tool to compute {a} + {b}", {"name": "calculator", "arguments": {"expression": f"{a}+{b}"}, "output": str(sum_result)}),
+            (f"{a} + {b} = {sum_result}. Now compute {sum_result} * 2.", {"name": "calculator", "arguments": {"expression": f"{sum_result} * 2"}, "output": str(product_result)}),
         ],
         f"First, {a} + {b} = {sum_result}. Then, {sum_result} * 2 = {product_result}.",
     )
 
 
 def _gen_multi_step_string(rng: random.Random):
-    words = ["hello", "world", "python"]
+    words = ' '.join(random_word.word() for _ in range(rng.randint(1, 10)))
     text = " ".join(words)
     upper_text = text.upper()
     length = len(upper_text)
     return (
         f"Take the text \"{text}\", convert it to uppercase, and tell me its length.",
         [
-            {"name": "uppercase", "arguments": {"text": text}, "output": upper_text},
-            {"name": "string_length", "arguments": {"text": upper_text}, "output": str(length)},
+            ("First, I'll use `uppercase` tool to convert the text to uppercase.", {"name": "uppercase", "arguments": {"text": text}, "output": upper_text}),
+            ("Now I'll use `string_length` tool to find it's length.", {"name": "string_length", "arguments": {"text": upper_text}, "output": str(length)}),
         ],
         f"Converting \"{text}\" to uppercase gives \"{upper_text}\", which has {length} characters.",
     )
@@ -583,23 +577,23 @@ def _gen_weather_and_distance(rng: random.Random):
     return (
         f"What's the weather in {c1} and {c2}, and how far apart are they?",
         [
-            {"name": "lookup_weather", "arguments": {"city": c1}, "output": f"{condition1}, {temp1}°C"},
-            {"name": "lookup_weather", "arguments": {"city": c2}, "output": f"{condition2}, {temp2}°C"},
-            {"name": "distance_between", "arguments": {"city1": c1, "city2": c2}, "output": f"{dist} km"},
+            (f"I'll use `lookup_weather` tool to look up the weather in {c1} and {c2}.", {"name": "lookup_weather", "arguments": {"city": c1}, "output": f"{condition1}, {temp1}°C"}),
+            (f"Now {c2}.", {"name": "lookup_weather", "arguments": {"city": c2}, "output": f"{condition2}, {temp2}°C"}),
+            (f"Now I'll use `distance_between` tool to find distance between {c1} and {c2}.",{"name": "distance_between", "arguments": {"city1": c1, "city2": c2}, "output": f"{dist} km"}),
         ],
         f"{c1} is {condition1} at {temp1}°C, {c2} is {condition2} at {temp2}°C. They are {dist} km apart.",
     )
 
 
 def _gen_prime_and_factorial(rng: random.Random):
-    n = rng.randint(2, 15)
+    n = rng.randint(2, 30)
     is_p = all(n % i != 0 for i in range(2, int(n**0.5) + 1)) and n > 1
     fact = math.factorial(n)
     return (
         f"Is {n} prime? Also, what is {n}!?",
         [
-            {"name": "is_prime", "arguments": {"number": n}, "output": "true" if is_p else "false"},
-            {"name": "factorial", "arguments": {"n": n}, "output": str(fact)},
+            (f"First, I'll use `is_prime` tool to find if {n} is prime", {"name": "is_prime", "arguments": {"number": n}, "output": "true" if is_p else "false"}),
+            (f"Now I'll use `factorial` tool to find {n} factorial.", {"name": "factorial", "arguments": {"n": n}, "output": str(fact)}),
         ],
         f"{n} is {'a prime' if is_p else 'not a prime'} number, and {n}! = {fact}.",
     )
@@ -612,8 +606,8 @@ def _gen_currency_and_notify(rng: random.Random):
     return (
         f"Convert {amount} USD to EUR and notify user {user_id} with the result.",
         [
-            {"name": "convert_currency", "arguments": {"amount": amount, "from_currency": "USD", "to_currency": "EUR"}, "output": f"{converted} EUR"},
-            {"name": "send_notification", "arguments": {"user_id": user_id, "message": f"{amount} USD = {converted} EUR"}, "output": "sent"},
+            (f"I'll use `convert_currency` to convert the currency and `send_notification` to notify user {user_id}.", {"name": "convert_currency", "arguments": {"amount": amount, "from_currency": "USD", "to_currency": "EUR"}, "output": f"{converted} EUR"}),
+            (f"Now notify user {user_id}.", {"name": "send_notification", "arguments": {"user_id": user_id, "message": f"{amount} USD = {converted} EUR"}, "output": "sent"}),
         ],
         f"{amount} USD is {converted} EUR. User {user_id} has been notified.",
     )
@@ -665,23 +659,27 @@ def _make_tool_call(tc: dict) -> chat_api.ToolCall:
 
 def _make_sample(
     user_query: str,
-    tool_calls: list[dict],
+    tool_calls: list[tuple[str, dict]],
     final_response: str,
     rng: random.Random,
 ) -> list[chat_api.BaseItem]:
-    required = list({tc["name"] for tc in tool_calls})
+    required = list({tc["name"] for _, tc in tool_calls})
     irrelevant_pool = [n for n in TOOL_NAMES if n not in required]
     n_irrelevant = rng.randint(0, min(len(irrelevant_pool), rng.randint(0, 5)))
     irrelevant = rng.sample(irrelevant_pool, n_irrelevant)
     selected = required + irrelevant
     rng.shuffle(selected)
 
+    asst_msgs = []
+    for msg, tc in tool_calls:
+        asst_msgs.append(chat_api.AssistantMessage(text=msg, tool_call=_make_tool_call(tc)))
+
     return [
         *[_TOOL_NAME_TO_DEF[n] for n in selected],
         chat_api.UserMessage(user_query),
+        *asst_msgs,
         chat_api.AssistantMessage(
             text=final_response,
-            tool_calls=[_make_tool_call(tc) for tc in tool_calls],
         ),
     ]
 

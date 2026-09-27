@@ -1,21 +1,23 @@
-import warnings
 import copy
 import json
 import os
 import random
+import re
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast, Literal, Any
-import re
+from typing import Any, Literal, cast
+
+import json_repair
 import myagent
+import myagent as ma
 import polars as pl
 import tqdm
-import json_repair
+import wonderwords
+from wonderwords import RandomWord
 
 from .. import chat_api
-import wonderwords
 
-from wonderwords import RandomWord
 
 def load_json_string(s: str) -> Any:
     try:
@@ -199,7 +201,11 @@ _templates = (
     "Your training sample should be a question about tinyreasoner and {}."
 )
 
-def generate_sample_single_turn(lm, callbacks, templates: Sequence[str]) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
+class InvalidExample(Exception): pass
+
+def generate_sample_single_turn(
+    lm: ma.BaseLanguageModel, callbacks, templates: Sequence[str]
+) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
     if random.random() < 0.01:
         word = "tinyreasoner"
     else:
@@ -214,7 +220,7 @@ def generate_sample_single_turn(lm, callbacks, templates: Sequence[str]) -> list
         elif choice == 3:
             word = f"{_random_word.word(include_categories=["noun"])} and {_random_word.word(include_categories=["noun"])}"
         else:
-            raise RuntimeError()
+            raise RuntimeError("can't happen")
 
     lm_messages = [
         myagent.SystemMessage("You are a training example generator for a dataset. You need to generate one example that will be used for training a tiny chat language model called tinyreasoner."),
@@ -226,11 +232,13 @@ def generate_sample_single_turn(lm, callbacks, templates: Sequence[str]) -> list
 {random.choice(templates).format(word)} The prompt should not assume any prior chat history, and the model shouldn't make anything up.
 ''')]
 
-    lm_output = myagent.agent_step(lm, lm_messages, streaming=True, callbacks=callbacks).content
+    lm_output = lm.agent_step(lm_messages, streaming=True, callbacks=callbacks).content
+    assert lm_output is not None
+
     try:
         lm_output_json = load_json_string(f"{{{extract_string_between(lm_output, r"{", r"}")}}}")
-        if "user" not in lm_output_json or "assistant" not in lm_output_json: raise RuntimeError("No user or assistant message.")
-        return [chat_api.UserMessage(lm_output_json["user"]), chat_api.AssistantMessage(lm_output_json["assistant"])]
+        if "user" not in lm_output_json or "assistant" not in lm_output_json: raise InvalidExample("No user or assistant message.")
+        return [chat_api.UserMessage(lm_output_json["user"]), chat_api.AssistantMessage(text=lm_output_json["assistant"])]
 
     except Exception as e:
         print(f"Error parsing LM output:\n{lm_output}")
@@ -240,7 +248,7 @@ def generate_sample_single_turn(lm, callbacks, templates: Sequence[str]) -> list
 _multi_turn_w_system = """Each message has two string fields: "role" - "system", "user" or "assistant", and "content" with the content of the message. The first message should be either a system or a user message. System message is always followed by a user message."""
 _multi_turn_w_o_system = """Each message has two string fields: "role" - "user" or "assistant", and "content" with the content of the message. The first message should a user message."""
 
-def generate_sample_multi_turn(lm, callbacks, w_system:bool, templates: Sequence[str]) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
+def generate_sample_multi_turn(lm: ma.BaseLanguageModel, callbacks, w_system:bool, templates: Sequence[str]) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
     if random.random() < 0.01:
         word = "tinyreasoner"
     else:
@@ -255,7 +263,7 @@ def generate_sample_multi_turn(lm, callbacks, w_system:bool, templates: Sequence
         elif choice == 3:
             word = f"{_random_word.word(include_categories=["noun"])} and {_random_word.word(include_categories=["noun"])}"
         else:
-            raise RuntimeError()
+            raise RuntimeError('cant happen')
 
     user_message = f'''Generate a very basic multi-turn training example of as a JSON array of messages. %TEMPLATE% Example:
 ```json
@@ -281,24 +289,25 @@ def generate_sample_multi_turn(lm, callbacks, w_system:bool, templates: Sequence
         myagent.SystemMessage("You are a training example generator for a dataset. You need to generate one multi-turn example that will be used for training a tiny chat language model called tinyreasoner."),
         myagent.UserMessage(user_message)]
 
-    lm_output = myagent.agent_step(lm, lm_messages, streaming=True, callbacks=callbacks).content
+    lm_output = lm.agent_step(lm_messages, streaming=True, callbacks=callbacks).content
+    assert lm_output is not None
 
     try:
         lm_output_json = load_json_string(f"[{extract_string_between(lm_output, '[', ']')}]")
 
         for msg in lm_output_json:
-            if ("role" not in msg) or ("content" not in msg): raise RuntimeError("No 'role' or 'content' key.")
+            if ("role" not in msg) or ("content" not in msg): raise InvalidExample("No 'role' or 'content' key.")
             msg["role"] = str(msg["role"]).lower().strip()
-            if msg["role"] not in ("system", "user", "assistant"): raise RuntimeError(f"Invalid role {msg['role']}")
+            if msg["role"] not in ("system", "user", "assistant"): raise InvalidExample(f"Invalid role {msg['role']}")
 
-        if not any(msg["role"] == "user" for msg in lm_output_json): raise RuntimeError("No user messages.")
-        if not any(msg["role"] == "assistant" for msg in lm_output_json): raise RuntimeError("No assistant messages.")
+        if not any(msg["role"] == "user" for msg in lm_output_json): raise InvalidExample("No user messages.")
+        if not any(msg["role"] == "assistant" for msg in lm_output_json): raise InvalidExample("No assistant messages.")
 
         training_sample = []
         for msg in lm_output_json:
             # NOTE: we don't have system role, it's just another user message
             if msg["role"] in ("system", "user"): training_sample.append(chat_api.UserMessage(msg["content"]))
-            elif msg["role"] == "assistant": training_sample.append(chat_api.AssistantMessage(msg["content"]))
+            elif msg["role"] == "assistant": training_sample.append(chat_api.AssistantMessage(text=msg["content"]))
             else: raise RuntimeError("can't happen")
 
         return training_sample
@@ -309,7 +318,7 @@ def generate_sample_multi_turn(lm, callbacks, w_system:bool, templates: Sequence
         return None
 
 
-def generate_sample_tool_calling(lm, callbacks, templates: Sequence[str]) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
+def generate_sample_tool_calling(lm: ma.BaseLanguageModel, callbacks, templates: Sequence[str]) -> list[chat_api.UserMessage | chat_api.AssistantMessage] | None:
     if random.random() < 0.01:
         word = "tinyreasoner"
     else:
@@ -324,7 +333,7 @@ def generate_sample_tool_calling(lm, callbacks, templates: Sequence[str]) -> lis
         elif choice == 3:
             word = f"{_random_word.word(include_categories=["noun"])} and {_random_word.word(include_categories=["noun"])}"
         else:
-            raise RuntimeError()
+            raise RuntimeError('cant happen')
 
     lm_messages = [
         myagent.SystemMessage("You are a training example generator for a dataset. You need to generate one tool-calling example that will be used for training a tiny chat language model called tinyreasoner."),
@@ -378,6 +387,7 @@ Example
     {{"role": "user", "content": "send URGENT email to boss@gmail.com tell him ill be 1 hour late"}},
     {{
         "role": "assistant",
+        "content": "I'll use the `send_email` tool to send the email.",
         "tool_call": {{
             "name": "send_email",
             "args": {{
@@ -386,62 +396,63 @@ Example
                 "urgency": "high"
             }},
             "tool_output": "Mail sent."
-        }},
-        "content": "I have sent an email to boss@gmail.com saying that you will be 1 hour late."
-    }}
+        }}
+    }},
+    {{"role": "assistant", "content": "I have sent an email to boss@gmail.com saying that you will be 1 hour late. The tool returned `Mail sent`, confirming that the email was sent."}}
 ]
 ```
 
 {random.choice(templates).format(word)} The model shouldn't assume any knowledge about the user and shouldn't make anything up.
 ''')]
 
-    lm_output = myagent.agent_step(lm, lm_messages, streaming=True, callbacks=callbacks).content
+    lm_output = lm.agent_step(lm_messages, streaming=True, callbacks=callbacks).content
+    assert lm_output is not None
 
     try:
         lm_output_json = load_json_string(f"[{extract_string_between(lm_output, '[', ']')}]")
 
         for msg in lm_output_json:
-            if "role" not in msg: raise RuntimeError("No 'role' key in message.")
+            if "role" not in msg: raise InvalidExample("No 'role' key in message.")
             msg["role"] = str(msg["role"]).lower().strip()
             if msg["role"] not in ("system", "user", "assistant", "tool_definition"):
-                raise RuntimeError(f"Invalid role {msg['role']}")
+                raise InvalidExample(f"Invalid role {msg['role']}")
 
             if msg["role"] == "tool_definition":
                 if "name" not in msg or "description" not in msg or "parameters" not in msg:
-                    raise RuntimeError("Missing 'name' or 'description' or 'parameters' from tool definition.")
+                    raise InvalidExample("Missing 'name' or 'description' or 'parameters' from tool definition.")
 
                 if isinstance(msg["parameters"], str):
                     msg["parameters"] = load_json_string(msg["parameters"])
 
             else:
-                if "content" not in msg: raise RuntimeError(f"No 'content' in {msg['role']} message")
+                if "content" not in msg: raise InvalidExample(f"No 'content' in {msg['role']} message")
 
             if "tool_call" in msg:
                 tc = msg["tool_call"]
                 if "tool_output" not in tc and "output" in tc: tc["tool_output"] = tc["output"]
                 if "name" not in tc or "args" not in tc or "tool_output" not in tc:
-                    raise RuntimeError("Missing 'name' or 'args' or 'tool_output' from tool call.")
+                    raise InvalidExample("Missing 'name' or 'args' or 'tool_output' from tool call.")
 
                 if isinstance(tc["args"], str): tc["args"] = load_json_string(tc["args"])
 
-        if not any(msg["role"] == "user" for msg in lm_output_json): raise RuntimeError("No user messages.")
-        if not any(msg["role"] == "assistant" for msg in lm_output_json): raise RuntimeError("No assistant messages.")
+        if not any(msg["role"] == "user" for msg in lm_output_json): raise InvalidExample("No user messages.")
+        if not any(msg["role"] == "assistant" for msg in lm_output_json): raise InvalidExample("No assistant messages.")
 
         training_sample = []
         for msg in lm_output_json:
-            # NOTE: we don't have system role, it's just another user message
             if msg["role"] == "tool_definition":
                 training_sample.append(chat_api.ToolDefinition(name=msg["name"], description=msg["description"], parameters=msg["parameters"]))
 
+            # we don't have system role, it's just another user message
             elif msg["role"] in ("system", "user"):
                 training_sample.append(chat_api.UserMessage(msg["content"]))
 
             elif msg["role"] == "assistant":
-                tool_calls = None
+                tool_call = None
                 if "tool_call" in msg:
                     tc = msg["tool_call"]
-                    tool_calls = [chat_api.ToolCall(name=tc["name"], arguments=tc["args"], output=tc["tool_output"])]
-                training_sample.append(chat_api.AssistantMessage(msg["content"], tool_calls=tool_calls))
+                    tool_call = chat_api.ToolCall(name=tc["name"], arguments=tc["args"], output=tc["tool_output"])
+                training_sample.append(chat_api.AssistantMessage(text=msg["content"], tool_call=tool_call))
 
             else: raise RuntimeError("can't happen")
 
@@ -461,6 +472,8 @@ def run_generate_dataset(
     callbacks=None,
     templates:Sequence[str]=_templates,
 ):
+    lm = ma.get_lm(lm)
+
     file = Path(file)
 
     if file.exists():

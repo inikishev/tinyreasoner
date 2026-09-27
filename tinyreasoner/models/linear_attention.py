@@ -1,7 +1,8 @@
 import torch
 from torch import nn
-from .base import BaseModel
+
 from ..tokenizer import BaseTokenizer
+from .base import BaseModel
 
 
 class LinearAttention(nn.Module):

@@ -1,6 +1,8 @@
 import polars as pl
 from huggingface_hub import snapshot_download
+
 from tinyreasoner import chat_api
+
 
 def load():
     local_path = snapshot_download(
@@ -13,6 +15,6 @@ def load():
 
     samples = []
     for row in df.iter_rows(named=True):
-        samples.append([chat_api.UserMessage(row["problem"]), chat_api.AssistantMessage(row["solution"])])
+        samples.append([chat_api.UserMessage(row["problem"]), chat_api.AssistantMessage(text=row["solution"])])
 
     return samples

@@ -1,8 +1,8 @@
-import numpy as np
 import math
 import random
 import string
 
+import numpy as np
 from wonderwords import RandomSentence, RandomWord
 
 from .. import chat_api
@@ -348,7 +348,7 @@ _generators = [
 
 def _create_chat(qa:tuple[str,str]):
     q,a = qa
-    return [chat_api.UserMessage(f"{q}\nonly include the answer in your response"), chat_api.AssistantMessage(f"{a}")]
+    return [chat_api.UserMessage(f"{q}\nonly include the answer in your response"), chat_api.AssistantMessage(text=f"{a}")]
 
 def load(n: int = 1000, seed=None):
     if seed is not None: raise NotImplementedError
